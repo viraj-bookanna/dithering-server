@@ -1,4 +1,4 @@
-import os, base64, requests
+import os, base64
 from flask import Flask, request, render_template, send_file, jsonify
 from PIL import Image
 from io import BytesIO
@@ -57,22 +57,10 @@ def convert_image():
         b64 = base64.b64encode(converted_bytes).decode('ascii')
         data_url = f'data:image/bmp;base64,{b64}'
 
+        # Return a data URL preview to the browser. Uploads to an external
+        # endpoint should be performed from the browser (client-side) so the
+        # user's local endpoints can be reached directly by their browser.
         result = {'preview': data_url}
-
-        # Optionally upload the converted image to another endpoint
-        if upload_endpoint_url:
-            files = {'image': ('dithered.bmp', converted_bytes, 'image/bmp')}
-            try:
-                up_resp = requests.post(upload_endpoint_url, files=files, timeout=60)
-                # try to include JSON response if possible, otherwise text
-                try:
-                    up_body = up_resp.json()
-                except Exception:
-                    up_body = up_resp.text
-                result['upload_response'] = {'status_code': up_resp.status_code, 'body': up_body}
-            except Exception as ue:
-                result['upload_response'] = {'error': f'Failed to upload to endpoint: {str(ue)}'}
-
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500

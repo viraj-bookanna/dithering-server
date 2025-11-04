@@ -253,17 +253,79 @@
                 previewImg.src = data.preview;
                 previewImg.style.border = '1px solid rgba(255,255,255,0.06)';
                 previewImg.style.maxWidth = '100%';
-                // Show upload response if present
-                let uploadHtml = '';
-                if (data.upload_response) {
-                    uploadHtml = `<h4>Upload response</h4><pre>${JSON.stringify(data.upload_response, null, 2)}</pre>`;
-                }
                 resultArea.innerHTML = '';
                 resultArea.appendChild(previewImg);
-                if (uploadHtml) {
-                    const div = document.createElement('div');
-                    div.innerHTML = uploadHtml;
-                    resultArea.appendChild(div);
+
+                // If an upload endpoint is provided, attempt to upload from the browser.
+                // Note: The upload endpoint MUST allow CORS (Access-Control-Allow-Origin)
+                // for the browser to send the request. If it doesn't, the browser will
+                // block the request and you'll see a CORS error in the console.
+                const uploadUrl = (new FormData(form)).get('upload_endpoint_url') || '';
+                if (uploadUrl && uploadUrl.trim()) {
+                    const info = document.createElement('div');
+                    info.style.marginTop = '8px';
+                    info.innerHTML = '<em>Attempting to upload converted image to the provided endpoint...</em>';
+                    resultArea.appendChild(info);
+
+                    try {
+                        // convert data URL to a Blob
+                        function dataURLtoBlob(dataurl) {
+                            const arr = dataurl.split(',');
+                            const mime = arr[0].match(/:(.*?);/)[1];
+                            const bstr = atob(arr[1]);
+                            let n = bstr.length;
+                            const u8arr = new Uint8Array(n);
+                            while (n--) {
+                                u8arr[n] = bstr.charCodeAt(n);
+                            }
+                            return new Blob([u8arr], { type: mime });
+                        }
+
+                        const blob = dataURLtoBlob(data.preview);
+                        const uploadFd = new FormData();
+                        // Use the same field name the server expects: 'image'
+                        uploadFd.append('image', blob, 'dithered.bmp');
+
+                        const upResp = await fetch(uploadUrl, { method: 'POST', body: uploadFd });
+
+                        // If the request succeeded, try to parse JSON, otherwise text
+                        let upBody = null;
+                        try { upBody = await upResp.clone().json(); } catch (e) { upBody = await upResp.text(); }
+
+                        const upDiv = document.createElement('div');
+                        upDiv.style.marginTop = '10px';
+                        upDiv.innerHTML = `<h4>Upload response</h4><pre>${JSON.stringify({ status: upResp.status, body: upBody }, null, 2)}</pre>`;
+                        resultArea.appendChild(upDiv);
+                    } catch (uploadErr) {
+                        // Common cause: CORS blocked the request. Provide guidance.
+                        const errDiv = document.createElement('div');
+                        errDiv.style.marginTop = '10px';
+                        let msg = '';
+                        if (uploadErr.name === 'TypeError') {
+                            msg = `Upload failed — likely blocked by CORS or network error. Make sure the upload endpoint allows cross-origin requests (Access-Control-Allow-Origin) or run the endpoint on the same origin as this page.`;
+                        } else {
+                            msg = `Upload failed: ${uploadErr}`;
+                        }
+                        errDiv.innerHTML = `<pre style="color: #ffb4b4">${msg}</pre>`;
+                        resultArea.appendChild(errDiv);
+
+                        // Also provide a short troubleshooting note with a downloadable copy option
+                        const dlPara = document.createElement('p');
+                        dlPara.innerHTML = 'You can also download the converted BMP and upload it manually to your endpoint.';
+                        resultArea.appendChild(dlPara);
+                        const dlBtn = document.createElement('a');
+                        dlBtn.href = data.preview;
+                        dlBtn.download = 'dithered.bmp';
+                        dlBtn.textContent = 'Download BMP';
+                        dlBtn.style.display = 'inline-block';
+                        dlBtn.style.marginTop = '6px';
+                        dlBtn.style.padding = '8px 10px';
+                        dlBtn.style.background = '#2563eb';
+                        dlBtn.style.color = 'white';
+                        dlBtn.style.borderRadius = '6px';
+                        dlBtn.style.textDecoration = 'none';
+                        resultArea.appendChild(dlBtn);
+                    }
                 }
             } catch (err) {
                 resultArea.innerHTML = `<pre>Request failed: ${err}</pre>`;
