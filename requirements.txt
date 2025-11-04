@@ -1,0 +1,5 @@
+flask
+pillow
+scikit-image
+requests
+git+https://github.com/sedthh/pyxelate.git
